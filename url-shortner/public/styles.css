@@ -113,6 +113,10 @@ input:focus {
   outline: 3px solid var(--soft);
 }
 
+input:invalid:not(:placeholder-shown) {
+  border-color: var(--danger);
+}
+
 button {
   border: 0;
   border-radius: 6px;

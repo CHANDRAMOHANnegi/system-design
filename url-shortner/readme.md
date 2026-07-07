@@ -246,4 +246,66 @@ Random generation is simple.
 Uniqueness comes from checking storage.
 ```
 
-Next step: custom aliases, such as choosing `/my-link` instead of a random code.
+## Step 4: Custom Aliases
+
+Sometimes the user does not want a random code.
+
+Instead of:
+
+```txt
+http://localhost:3001/R19GcB
+```
+
+They may want:
+
+```txt
+http://localhost:3001/my-link
+```
+
+That chosen name is called a custom alias.
+
+The create request can now include `customAlias`:
+
+```bash
+curl -s \
+  -X POST http://localhost:3001/api/shorten \
+  -H "Content-Type: application/json" \
+  -d '{"longUrl":"https://example.com/docs","customAlias":"my-link"}'
+```
+
+Response:
+
+```json
+{
+  "code": "my-link",
+  "codeType": "custom",
+  "generationAttempts": 0,
+  "longUrl": "https://example.com/docs",
+  "shortUrl": "http://localhost:3001/my-link"
+}
+```
+
+Custom aliases need stricter rules because the user controls them.
+
+Our rules:
+
+```txt
+3 to 32 characters
+letters allowed
+numbers allowed
+hyphen allowed
+underscore allowed
+spaces not allowed
+alias must not already exist
+```
+
+If the alias already exists, the server returns an error instead of overwriting the old link.
+
+Learning point:
+
+```txt
+Random code conflict -> generate again.
+Custom alias conflict -> ask user to choose another alias.
+```
+
+Next step: duplicate long URL handling, such as whether the same long URL should return the old short link or create a new one.

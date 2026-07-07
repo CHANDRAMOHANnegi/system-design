@@ -29,6 +29,7 @@ app.use(express.static(publicDir));
 const linksByCode = new Map<string, LinkRecord>();
 const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 const maxCodeGenerationAttempts = 10;
+const customAliasPattern = /^[a-zA-Z0-9_-]{3,32}$/;
 
 function ensureDataFile(): void {
   if (!fs.existsSync(dataDir)) {
@@ -90,6 +91,27 @@ function createUniqueCode(length = 6, codeGenerator = generateCode): CodeResult 
   };
 }
 
+function normalizeAlias(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function validateCustomAlias(alias: string): string | undefined {
+  if (!customAliasPattern.test(alias)) {
+    return "customAlias must be 3-32 characters and use only letters, numbers, hyphen, or underscore";
+  }
+
+  if (linksByCode.has(alias)) {
+    return "customAlias is already taken";
+  }
+
+  return undefined;
+}
+
 function isValidHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
@@ -112,6 +134,7 @@ app.get("/api", (_request, response) => {
 
 app.post("/api/shorten", (request, response) => {
   const longUrl = request.body?.longUrl;
+  const customAlias = normalizeAlias(request.body?.customAlias);
 
   if (typeof longUrl !== "string" || !isValidHttpUrl(longUrl)) {
     response.status(400).json({
@@ -120,7 +143,20 @@ app.post("/api/shorten", (request, response) => {
     return;
   }
 
-  const codeResult = createUniqueCode();
+  if (customAlias) {
+    const aliasError = validateCustomAlias(customAlias);
+
+    if (aliasError) {
+      response.status(409).json({
+        error: aliasError
+      });
+      return;
+    }
+  }
+
+  const codeResult = customAlias
+    ? { code: customAlias, attempts: 0 }
+    : createUniqueCode();
   const record: LinkRecord = {
     code: codeResult.code,
     longUrl,
@@ -133,6 +169,7 @@ app.post("/api/shorten", (request, response) => {
 
   response.status(201).json({
     code: codeResult.code,
+    codeType: customAlias ? "custom" : "random",
     generationAttempts: codeResult.attempts,
     longUrl,
     shortUrl: `http://localhost:${port}/${codeResult.code}`

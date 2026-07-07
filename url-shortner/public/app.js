@@ -1,5 +1,6 @@
 const form = document.querySelector("#shorten-form");
 const input = document.querySelector("#long-url");
+const aliasInput = document.querySelector("#custom-alias");
 const resultPanel = document.querySelector("#result-panel");
 const shortUrlLink = document.querySelector("#short-url");
 const linksList = document.querySelector("#links-list");
@@ -48,7 +49,8 @@ form.addEventListener("submit", async (event) => {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      longUrl: input.value
+      longUrl: input.value,
+      customAlias: aliasInput.value
     })
   });
 
@@ -64,6 +66,7 @@ form.addEventListener("submit", async (event) => {
   shortUrlLink.href = data.shortUrl;
   shortUrlLink.textContent = data.shortUrl;
   input.value = "";
+  aliasInput.value = "";
   await loadLinks();
 });
 
