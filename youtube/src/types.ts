@@ -10,6 +10,7 @@ export type UploadPart = {
   uploadUrl: string;
   uploaded: boolean;
   sizeBytes?: number;
+  etag?: string;
 };
 
 export type VideoRecord = {

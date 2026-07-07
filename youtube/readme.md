@@ -88,6 +88,29 @@ GET /api/videos/:videoId/manifest
   Returns the manifest after processing completes.
 ```
 
+## Frontend Chunking
+
+The browser does not send the whole file in one request. It creates a chunk plan:
+
+```text
+file -> file.slice(start, end) -> 512 KB chunks in this lab
+```
+
+Then it uploads chunks through a small worker pool:
+
+```text
+3 parallel PUT requests -> fake object storage
+failed chunk -> retry only that chunk
+successful chunk -> store partNumber + ETag
+```
+
+The important boundary:
+
+```text
+Frontend owns chunking, parallelism, progress, retry, and ETag collection.
+Backend owns upload session, upload URLs, ETag verification, completion, and metadata state.
+```
+
 In real AWS terms:
 
 ```text

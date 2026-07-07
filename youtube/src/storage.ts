@@ -1,6 +1,14 @@
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import path from "node:path";
-import { manifestsDir, multipartDir, processedDir, rawDir, storageDir } from "./paths.js";
+import {
+  manifestsDir,
+  multipartDir,
+  multipartPartPath,
+  processedDir,
+  rawDir,
+  storageDir
+} from "./paths.js";
 import type { Manifest, VideoRecord } from "./types.js";
 
 export async function ensureStorage(): Promise<void> {
@@ -14,7 +22,7 @@ export async function ensureStorage(): Promise<void> {
 }
 
 export function partPath(uploadId: string, partNumber: number): string {
-  return path.join(multipartDir, uploadId, `part-${String(partNumber).padStart(4, "0")}`);
+  return multipartPartPath(uploadId, partNumber);
 }
 
 export function rawVideoPath(videoId: string, fileName: string): string {
@@ -22,11 +30,18 @@ export function rawVideoPath(videoId: string, fileName: string): string {
   return path.join(rawDir, `${videoId}-${safeName}`);
 }
 
-export async function writePart(uploadId: string, partNumber: number, body: Buffer): Promise<number> {
+export async function writePart(
+  uploadId: string,
+  partNumber: number,
+  body: Buffer
+): Promise<{ sizeBytes: number; etag: string }> {
   const destination = partPath(uploadId, partNumber);
   await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.writeFile(destination, body);
-  return body.byteLength;
+  return {
+    sizeBytes: body.byteLength,
+    etag: crypto.createHash("md5").update(body).digest("hex")
+  };
 }
 
 export async function combineParts(video: VideoRecord): Promise<string> {

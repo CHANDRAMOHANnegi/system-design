@@ -75,15 +75,16 @@ app.put("/api/object-storage/uploads/:uploadId/parts/:partNumber", async (reques
   }
 
   const body = Buffer.isBuffer(request.body) ? request.body : Buffer.from([]);
-  const size = await writePart(uploadId, partNumber, body);
+  const { sizeBytes, etag } = await writePart(uploadId, partNumber, body);
   const updatedParts = video.parts.map((candidate) =>
     candidate.partNumber === partNumber
-      ? { ...candidate, uploaded: true, sizeBytes: size }
+      ? { ...candidate, uploaded: true, sizeBytes, etag }
       : candidate
   );
 
   await saveVideo({ ...video, parts: updatedParts });
-  response.json({ uploadId, partNumber, uploaded: true, sizeBytes: size });
+  response.setHeader("ETag", etag);
+  response.json({ uploadId, partNumber, uploaded: true, sizeBytes, etag });
 });
 
 app.post("/api/videos/upload/:uploadId/complete", async (request, response) => {
@@ -99,6 +100,15 @@ app.post("/api/videos/upload/:uploadId/complete", async (request, response) => {
     response.status(409).json({
       error: "Cannot complete upload until all parts are uploaded",
       missingParts: missingParts.map((part) => part.partNumber)
+    });
+    return;
+  }
+
+  const partsWithoutEtags = video.parts.filter((part) => !part.etag);
+  if (partsWithoutEtags.length > 0) {
+    response.status(409).json({
+      error: "Cannot complete upload until every uploaded part has an ETag",
+      partsWithoutEtags: partsWithoutEtags.map((part) => part.partNumber)
     });
     return;
   }
