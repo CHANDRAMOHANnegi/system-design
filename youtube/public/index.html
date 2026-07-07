@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube System Design Lab</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <p class="eyebrow">YouTube HLD</p>
+        <h1>Multipart Upload Simulator</h1>
+        <p class="lede">
+          Pick a file and watch the app server create upload URLs while the browser sends
+          video bytes directly to fake object storage.
+        </p>
+
+        <label class="file-picker">
+          <span>Choose video/file</span>
+          <input id="fileInput" type="file" />
+        </label>
+
+        <button id="uploadButton" type="button">Start Multipart Upload</button>
+
+        <div class="flow">
+          <div>1. API creates upload session</div>
+          <div>2. Browser uploads parts to fake S3</div>
+          <div>3. API completes upload</div>
+          <div>4. Worker creates manifest + segments</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Current Video</h2>
+        <pre id="statusBox">No upload yet.</pre>
+      </section>
+
+      <section class="panel wide">
+        <h2>Manifest / Segments</h2>
+        <div id="manifestBox" class="manifest">Video will appear here after processing.</div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
