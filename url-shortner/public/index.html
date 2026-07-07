@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>URL Shortener Lab</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="workspace" aria-labelledby="page-title">
+        <div class="intro">
+          <p class="eyebrow">System design lab</p>
+          <h1 id="page-title">URL Shortener</h1>
+          <p class="summary">
+            Create a short code, store it in memory, and redirect through Express.
+          </p>
+        </div>
+
+        <form class="shorten-form" id="shorten-form">
+          <label for="long-url">Long URL</label>
+          <div class="input-row">
+            <input
+              id="long-url"
+              name="longUrl"
+              type="url"
+              placeholder="https://example.com/some/very/long/path"
+              required
+            />
+            <button type="submit">Shorten</button>
+          </div>
+        </form>
+
+        <section class="result-panel" id="result-panel" hidden>
+          <span class="panel-label">Short URL</span>
+          <a id="short-url" href="#"></a>
+        </section>
+
+        <section class="links-panel" aria-labelledby="links-title">
+          <div class="panel-header">
+            <h2 id="links-title">Stored Links</h2>
+            <button class="secondary" id="refresh-links" type="button">Refresh</button>
+          </div>
+          <div class="empty-state" id="empty-state">No short links yet.</div>
+          <ul class="links-list" id="links-list"></ul>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

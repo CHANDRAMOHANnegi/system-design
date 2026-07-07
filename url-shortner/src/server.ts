@@ -1,4 +1,6 @@
 import express from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 type LinkRecord = {
   code: string;
@@ -9,8 +11,12 @@ type LinkRecord = {
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
+const currentFile = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFile);
+const publicDir = path.join(currentDir, "..", "public");
 
 app.use(express.json());
+app.use(express.static(publicDir));
 
 const linksByCode = new Map<string, LinkRecord>();
 const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -45,7 +51,7 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
-app.get("/", (_request, response) => {
+app.get("/api", (_request, response) => {
   response.json({
     name: "URL Shortener Learning Lab",
     routes: {

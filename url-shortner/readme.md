@@ -35,6 +35,7 @@ The server does:
 So the first version only needs three things:
 
 ```txt
+GET /              -> open browser preview
 POST /api/shorten  -> create short URL
 GET /api/links     -> see stored mappings
 GET /:code         -> redirect to original URL
@@ -46,6 +47,9 @@ GET /:code         -> redirect to original URL
 package.json     -> project scripts and dependencies
 tsconfig.json    -> TypeScript compiler settings
 src/server.ts    -> Express API and in-memory URL storage
+public/index.html -> browser preview
+public/app.js     -> calls the API from the browser
+public/styles.css -> preview styling
 ```
 
 ## Run Locally
