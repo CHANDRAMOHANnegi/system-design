@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -14,12 +15,44 @@ const port = Number(process.env.PORT ?? 3000);
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
 const publicDir = path.join(currentDir, "..", "public");
+const dataDir = path.join(currentDir, "..", "data");
+const linksFile = path.join(dataDir, "links.json");
 
 app.use(express.json());
 app.use(express.static(publicDir));
 
 const linksByCode = new Map<string, LinkRecord>();
 const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+function ensureDataFile(): void {
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  if (!fs.existsSync(linksFile)) {
+    fs.writeFileSync(linksFile, "[]\n");
+  }
+}
+
+function loadLinks(): void {
+  ensureDataFile();
+
+  const rawJson = fs.readFileSync(linksFile, "utf8");
+  const links = JSON.parse(rawJson) as LinkRecord[];
+
+  linksByCode.clear();
+
+  for (const link of links) {
+    linksByCode.set(link.code, link);
+  }
+}
+
+function saveLinks(): void {
+  ensureDataFile();
+
+  const links = Array.from(linksByCode.values());
+  fs.writeFileSync(linksFile, `${JSON.stringify(links, null, 2)}\n`);
+}
 
 function generateCode(length = 6): string {
   let code = "";
@@ -81,6 +114,7 @@ app.post("/api/shorten", (request, response) => {
   };
 
   linksByCode.set(code, record);
+  saveLinks();
 
   response.status(201).json({
     code,
@@ -106,8 +140,11 @@ app.get("/:code", (request, response) => {
   }
 
   record.clicks += 1;
+  saveLinks();
   response.redirect(record.longUrl);
 });
+
+loadLinks();
 
 app.listen(port, () => {
   console.log(`URL shortener lab running on http://localhost:${port}`);

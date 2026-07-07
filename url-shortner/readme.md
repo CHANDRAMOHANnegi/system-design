@@ -106,4 +106,54 @@ Server stopped -> links are lost
 
 This is good for learning the flow, but not enough for a real product.
 
-Next step: move the mapping into persistent storage so short links survive server restarts.
+## Step 2: Persistent Storage
+
+Now the server saves links to a local JSON file:
+
+```txt
+data/links.json
+```
+
+The flow becomes:
+
+```txt
+Server starts
+  -> read data/links.json
+  -> load links into memory
+
+POST /api/shorten
+  -> create short code
+  -> save mapping in memory
+  -> write full list back to data/links.json
+
+GET /:code
+  -> find mapping in memory
+  -> increment click count
+  -> write updated click count to data/links.json
+  -> redirect browser
+```
+
+So we still use a `Map` for fast lookup while the server is running, but the source of truth now survives restarts.
+
+This local JSON file is not what a production system would use, but it teaches the storage boundary clearly.
+
+Production systems usually replace `data/links.json` with a database such as PostgreSQL, MySQL, DynamoDB, or Cassandra.
+
+## Step 2 Code Map
+
+The important functions in `src/server.ts` are:
+
+```txt
+ensureDataFile() -> creates data/links.json if missing
+loadLinks()      -> reads saved links when server starts
+saveLinks()      -> writes latest links after create/click
+```
+
+Learning point:
+
+```txt
+Memory is fast, but temporary.
+Storage is slower, but durable.
+```
+
+Next step: talk about short-code generation, collisions, and why 6 random characters may or may not be enough.
