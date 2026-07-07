@@ -10,6 +10,11 @@ type LinkRecord = {
   clicks: number;
 };
 
+type CodeResult = {
+  code: string;
+  attempts: number;
+};
+
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 const currentFile = fileURLToPath(import.meta.url);
@@ -23,6 +28,7 @@ app.use(express.static(publicDir));
 
 const linksByCode = new Map<string, LinkRecord>();
 const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+const maxCodeGenerationAttempts = 10;
 
 function ensureDataFile(): void {
   if (!fs.existsSync(dataDir)) {
@@ -65,14 +71,23 @@ function generateCode(length = 6): string {
   return code;
 }
 
-function createUniqueCode(): string {
-  let code = generateCode();
+function createUniqueCode(length = 6, codeGenerator = generateCode): CodeResult {
+  let attempts = 1;
+  let code = codeGenerator(length);
 
   while (linksByCode.has(code)) {
-    code = generateCode();
+    if (attempts >= maxCodeGenerationAttempts) {
+      throw new Error("Could not create a unique short code");
+    }
+
+    attempts += 1;
+    code = codeGenerator(length);
   }
 
-  return code;
+  return {
+    code,
+    attempts
+  };
 }
 
 function isValidHttpUrl(value: string): boolean {
@@ -105,27 +120,52 @@ app.post("/api/shorten", (request, response) => {
     return;
   }
 
-  const code = createUniqueCode();
+  const codeResult = createUniqueCode();
   const record: LinkRecord = {
-    code,
+    code: codeResult.code,
     longUrl,
     createdAt: new Date().toISOString(),
     clicks: 0
   };
 
-  linksByCode.set(code, record);
+  linksByCode.set(codeResult.code, record);
   saveLinks();
 
   response.status(201).json({
-    code,
+    code: codeResult.code,
+    generationAttempts: codeResult.attempts,
     longUrl,
-    shortUrl: `http://localhost:${port}/${code}`
+    shortUrl: `http://localhost:${port}/${codeResult.code}`
   });
 });
 
 app.get("/api/links", (_request, response) => {
   response.json({
     links: Array.from(linksByCode.values())
+  });
+});
+
+app.post("/api/debug/collision-demo", (_request, response) => {
+  const existingCode = "DEMO01";
+  const fallbackCode = "DEMO02";
+
+  if (!linksByCode.has(existingCode)) {
+    linksByCode.set(existingCode, {
+      code: existingCode,
+      longUrl: "https://example.com/already-taken",
+      createdAt: new Date().toISOString(),
+      clicks: 0
+    });
+  }
+
+  const forcedCodes = [existingCode, fallbackCode];
+  const result = createUniqueCode(6, () => forcedCodes.shift() ?? generateCode());
+
+  response.json({
+    message: "The first generated code already existed, so the server tried again.",
+    existingCode,
+    selectedCode: result.code,
+    generationAttempts: result.attempts
   });
 });
 

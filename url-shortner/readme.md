@@ -156,4 +156,94 @@ Memory is fast, but temporary.
 Storage is slower, but durable.
 ```
 
-Next step: talk about short-code generation, collisions, and why 6 random characters may or may not be enough.
+## Step 3: Code Generation And Collisions
+
+The short code is the small ID in the URL:
+
+```txt
+http://localhost:3001/nH9uER
+                      ^^^^^^
+                      short code
+```
+
+Our app creates a 6-character random code from this alphabet:
+
+```txt
+a-z A-Z 0-9
+```
+
+That gives 62 possible characters for each position.
+
+For a 6-character code:
+
+```txt
+62 * 62 * 62 * 62 * 62 * 62 = 56,800,235,584 possible codes
+```
+
+That is a lot, but collisions are still possible.
+
+A collision means:
+
+```txt
+Generated code: nH9uER
+But nH9uER already exists in storage.
+```
+
+So the server must not blindly accept the generated code.
+
+The safe flow is:
+
+```txt
+1. Generate a code
+2. Check if code already exists
+3. If it exists, generate again
+4. Stop after a max number of attempts
+```
+
+In our code:
+
+```txt
+generateCode()      -> creates a random code
+createUniqueCode()  -> keeps trying until the code is unused
+```
+
+`POST /api/shorten` now returns `generationAttempts` so you can see how many tries were needed.
+
+Example:
+
+```json
+{
+  "code": "nH9uER",
+  "generationAttempts": 1,
+  "longUrl": "https://example.com",
+  "shortUrl": "http://localhost:3001/nH9uER"
+}
+```
+
+Most of the time it will be `1`.
+
+To see a forced collision demo:
+
+```bash
+curl -s -X POST http://localhost:3001/api/debug/collision-demo
+```
+
+You should see:
+
+```json
+{
+  "message": "The first generated code already existed, so the server tried again.",
+  "existingCode": "DEMO01",
+  "selectedCode": "DEMO02",
+  "generationAttempts": 2
+}
+```
+
+Learning point:
+
+```txt
+Random generation is simple.
+Uniqueness comes from checking storage.
+```
+
+Next step: custom aliases, such as choosing `/my-link` instead of a random code.
