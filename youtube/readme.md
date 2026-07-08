@@ -90,7 +90,7 @@ GET /api/videos/:videoId/manifest
 
 ## Frontend Chunking
 
-The browser does not send the whole file in one request. It creates a chunk plan:
+The browser does not automatically split the file for us. Our frontend JavaScript uses the browser File/Blob API to create a chunk plan:
 
 ```text
 file -> file.slice(start, end) -> 512 KB chunks in this lab
