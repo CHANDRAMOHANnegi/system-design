@@ -6,9 +6,12 @@ type DatabaseShape = {
   videos: VideoRecord[];
 };
 
+let saveQueue = Promise.resolve();
+
 async function readDatabase(): Promise<DatabaseShape> {
   try {
     const raw = await fs.readFile(dbFile, "utf8");
+    if (!raw.trim()) return { videos: [] };
     return JSON.parse(raw) as DatabaseShape;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
@@ -19,7 +22,9 @@ async function readDatabase(): Promise<DatabaseShape> {
 
 async function writeDatabase(database: DatabaseShape): Promise<void> {
   await fs.mkdir(dataDir, { recursive: true });
-  await fs.writeFile(dbFile, JSON.stringify(database, null, 2));
+  const temporaryFile = `${dbFile}.tmp`;
+  await fs.writeFile(temporaryFile, JSON.stringify(database, null, 2));
+  await fs.rename(temporaryFile, dbFile);
 }
 
 export async function listVideos(): Promise<VideoRecord[]> {
@@ -38,15 +43,34 @@ export async function getVideoByUploadId(uploadId: string): Promise<VideoRecord 
 }
 
 export async function saveVideo(video: VideoRecord): Promise<void> {
-  const database = await readDatabase();
-  const index = database.videos.findIndex((existing) => existing.id === video.id);
-  const nextVideo = { ...video, updatedAt: new Date().toISOString() };
+  saveQueue = saveQueue.then(async () => {
+    const database = await readDatabase();
+    const index = database.videos.findIndex((existing) => existing.id === video.id);
+    const nextVideo = { ...video, updatedAt: new Date().toISOString() };
 
-  if (index === -1) {
-    database.videos.push(nextVideo);
-  } else {
-    database.videos[index] = nextVideo;
-  }
+    if (index === -1) {
+      database.videos.push(nextVideo);
+    } else {
+      const existingVideo = database.videos[index];
+      const mergedParts = nextVideo.parts.map((part) => {
+        const existingPart = existingVideo.parts.find(
+          (candidate) => candidate.partNumber === part.partNumber
+        );
+        if (!existingPart) return part;
 
-  await writeDatabase(database);
+        return {
+          ...part,
+          uploaded: existingPart.uploaded || part.uploaded,
+          sizeBytes: part.sizeBytes ?? existingPart.sizeBytes,
+          etag: part.etag ?? existingPart.etag
+        };
+      });
+
+      database.videos[index] = { ...nextVideo, parts: mergedParts };
+    }
+
+    await writeDatabase(database);
+  });
+
+  return saveQueue;
 }
