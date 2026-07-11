@@ -10,6 +10,7 @@ import type { VideoRecord } from "./types.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
+const demoFailedParts = new Set<string>();
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.raw({ type: "application/octet-stream", limit: "50mb" }));
@@ -61,6 +62,18 @@ app.post("/api/videos/upload/init", async (request, response) => {
 app.put("/api/object-storage/uploads/:uploadId/parts/:partNumber", async (request, response) => {
   const uploadId = request.params.uploadId;
   const partNumber = Number(request.params.partNumber);
+  const demoFailureKey = `${uploadId}:${partNumber}`;
+  const shouldDemoFail =
+    request.header("x-demo-fail-once") === "true" && !demoFailedParts.has(demoFailureKey);
+
+  if (shouldDemoFail) {
+    demoFailedParts.add(demoFailureKey);
+    response.status(503).json({
+      error: `Demo object-storage failure for part ${partNumber}. Retry this same chunk.`
+    });
+    return;
+  }
+
   const video = await getVideoByUploadId(uploadId);
 
   if (!video) {

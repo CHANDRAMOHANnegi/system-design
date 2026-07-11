@@ -1,14 +1,25 @@
 const fileInput = document.querySelector("#fileInput");
 const uploadButton = document.querySelector("#uploadButton");
+const failPartOnceInput = document.querySelector("#failPartOnceInput");
 const statusBox = document.querySelector("#statusBox");
 const manifestBox = document.querySelector("#manifestBox");
 
 const partSizeBytes = 512 * 1024;
 const maxParallelUploads = 3;
 const maxPartAttempts = 3;
+const uploadEvents = [];
 
 function showStatus(value) {
   statusBox.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  statusBox.scrollTop = statusBox.scrollHeight;
+}
+
+function addUploadEvent(event) {
+  uploadEvents.push({
+    time: new Date().toLocaleTimeString(),
+    ...event
+  });
+  showStatus(uploadEvents);
 }
 
 async function requestJson(url, options) {
@@ -44,7 +55,10 @@ async function uploadPartWithRetry(part, onProgress) {
     try {
       const response = await fetch(part.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": "application/octet-stream" },
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Demo-Fail-Once": part.shouldFailOnce ? "true" : "false"
+        },
         body: part.chunk
       });
 
@@ -55,6 +69,7 @@ async function uploadPartWithRetry(part, onProgress) {
 
       const etag = payload.etag ?? response.headers.get("ETag");
       onProgress({
+        type: "uploaded",
         partNumber: part.partNumber,
         sizeBytes: payload.sizeBytes,
         etag,
@@ -63,7 +78,18 @@ async function uploadPartWithRetry(part, onProgress) {
       return { partNumber: part.partNumber, sizeBytes: payload.sizeBytes, etag };
     } catch (error) {
       lastError = error;
+      onProgress({
+        type: "failed",
+        partNumber: part.partNumber,
+        attempt,
+        error: error instanceof Error ? error.message : "Unknown upload failure"
+      });
       if (attempt < maxPartAttempts) {
+        onProgress({
+          type: "retrying",
+          partNumber: part.partNumber,
+          nextAttempt: attempt + 1
+        });
         await wait(250 * attempt);
       }
     }
@@ -73,9 +99,25 @@ async function uploadPartWithRetry(part, onProgress) {
 }
 
 async function uploadChunksWithPool(file, video) {
-  const pending = createChunkPlan(file, video.parts);
+  const shouldDemoFailure = Boolean(failPartOnceInput?.checked);
+  const demoFailurePartNumber = Math.min(2, video.totalParts);
+  const pending = createChunkPlan(file, video.parts).map((part) => ({
+    ...part,
+    shouldFailOnce: shouldDemoFailure && part.partNumber === demoFailurePartNumber
+  }));
   const completedParts = [];
   let uploadedBytes = 0;
+
+  if (shouldDemoFailure) {
+    addUploadEvent({
+      event: "failure demo armed",
+      partNumber: demoFailurePartNumber,
+      reason:
+        video.totalParts === 1
+          ? "file has only one chunk, so part 1 will fail once"
+          : "part 2 will fail once"
+    });
+  }
 
   async function worker(workerId) {
     while (pending.length > 0) {
@@ -88,15 +130,38 @@ async function uploadChunksWithPool(file, video) {
       );
 
       const uploadedPart = await uploadPartWithRetry(part, (progress) => {
-        uploadedBytes += progress.sizeBytes;
-        const percent = Math.round((uploadedBytes / file.size) * 100);
-        showStatus({
-          uploadId: video.uploadId,
-          uploaded: `${completedParts.length + 1}/${video.totalParts}`,
-          percent,
-          latestPart: progress.partNumber,
-          latestEtag: progress.etag,
-          attempt: progress.attempt
+        if (progress.type === "uploaded") {
+          uploadedBytes += progress.sizeBytes;
+          const percent = Math.round((uploadedBytes / file.size) * 100);
+          addUploadEvent({
+            event: "uploaded chunk",
+            workerId,
+            uploadId: video.uploadId,
+            uploaded: `${completedParts.length + 1}/${video.totalParts}`,
+            percent,
+            partNumber: progress.partNumber,
+            etag: progress.etag,
+            attempt: progress.attempt
+          });
+          return;
+        }
+
+        if (progress.type === "failed") {
+          addUploadEvent({
+            event: "chunk failed",
+            workerId,
+            partNumber: progress.partNumber,
+            attempt: progress.attempt,
+            error: progress.error
+          });
+          return;
+        }
+
+        addUploadEvent({
+          event: "retrying same chunk",
+          workerId,
+          partNumber: progress.partNumber,
+          nextAttempt: progress.nextAttempt
         });
       });
 
@@ -116,7 +181,11 @@ async function uploadChunksWithPool(file, video) {
 async function pollUntilReady(videoId) {
   while (true) {
     const { video } = await requestJson(`/api/videos/${videoId}`);
-    showStatus(video);
+    addUploadEvent({
+      event: "video status",
+      videoId: video.id,
+      status: video.status
+    });
 
     if (video.status === "READY") return video;
     if (video.status === "FAILED") throw new Error(video.error ?? "Processing failed");
@@ -163,6 +232,7 @@ uploadButton.addEventListener("click", async () => {
   }
 
   uploadButton.disabled = true;
+  uploadEvents.length = 0;
   manifestBox.textContent = "Waiting for processing...";
 
   try {
@@ -176,14 +246,23 @@ uploadButton.addEventListener("click", async () => {
       })
     });
 
-    showStatus(video);
+    addUploadEvent({
+      event: "upload session created",
+      uploadId: video.uploadId,
+      totalParts: video.totalParts,
+      partSizeBytes: video.partSizeBytes
+    });
 
     const completedParts = await uploadChunksWithPool(file, video);
 
     const completed = await requestJson(`/api/videos/upload/${video.uploadId}/complete`, {
       method: "POST"
     });
-    showStatus({ ...completed, completedParts });
+    addUploadEvent({
+      event: "complete multipart upload",
+      status: completed.video.status,
+      completedParts
+    });
 
     const readyVideo = await pollUntilReady(video.id);
     await renderManifest(readyVideo.id);
